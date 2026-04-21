@@ -21,8 +21,8 @@ and run from top to bottom.
 `word2vec.ipynb` with `random_state=42`:
 
 ```text
-model             macro ARI   weighted ARI
-word2vec_logreg     0.0670        -0.0035
+model             ARI
+word2vec_logreg   0.0670
 ```
 
 The BERT notebook is implemented but should be run separately because it needs
