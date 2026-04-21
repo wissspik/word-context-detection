@@ -1,0 +1,7 @@
+numpy>=1.26
+pandas>=2.2
+gensim>=4.3
+scikit-learn>=1.4
+tqdm>=4.66
+torch>=2.2
+transformers>=4.39
