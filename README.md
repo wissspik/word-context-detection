@@ -1,44 +1,97 @@
-# Russian Word Sense Induction
+# Индукция значений русских слов
 
-NLP project for Word Sense Induction on Russian contexts. The task is to
-separate examples of the same target word into sense groups using context.
+Проект решает задачу **Word Sense Induction** для русских целевых слов:
+нужно сгруппировать употребления одного и того же слова по значениям на основе
+контекста вокруг него.
 
-## Approach
-- Models:
-  - `word2vec_logreg`: locally trained Word2Vec context embeddings + Logistic Regression per target word.
-  - `bertwsi_agglomerative`: BERTWSI target-occurrence embeddings + per-word agglomerative clustering with cosine distance.
+Иными словами, модель получает много предложений с одним и тем же словом и
+должна понять, какие употребления относятся к одному смыслу, а какие - к другому.
+Например, разные контексты одного слова могут образовывать несколько смысловых
+кластеров.
 
-`BERTWSI.ipynb` contains the BERTWSI experiment: a multilingual BERT encoder
-builds contextual target-occurrence vectors, the target wordpiece vectors are
-pooled across the last hidden layers, the resulting vectors are normalized, and
-senses are induced by clustering occurrences of the same target word. Gold
-labels are used only for local validation scoring and for estimating the number
-of clusters per word.
+## Задача
 
+В каждой строке датасета есть:
 
-## Project Structure
+- `word` - целевое слово;
+- `context` - предложение или фрагмент текста с этим словом;
+- `positions` - позиция целевого слова в тексте;
+- `gold_sense_id` - правильный номер значения, используется для локальной
+  проверки качества.
+
+Модель предсказывает номер кластера для каждого употребления слова. Качество
+оценивается метрикой **Adjusted Rand Index (ARI)** отдельно для каждого слова,
+после чего считается среднее значение по словам.
+
+## Данные
+
+Данные расположены в папке `data/`:
 
 ```text
 data/
-  train/train.csv
-  test/test.csv
-BERTWSI.ipynb
-word2vec.ipynb
-requirements.txt
-.gitignore
+  train/
+    train.csv
+  test/
+    test.csv
+```
+- `data/train/train.csv` - обучающая выборка с разметкой `gold_sense_id`;
+- `data/test/test.csv` - тестовая выборка для построения финальных кластеров.
+
+### 1. Word2Vec baseline
+
+Это быстрый базовый вариант:
+
+1. обучает локальные Word2Vec-векторы на текстах из train;
+2. превращает контекст в средний вектор по словам;
+3. для каждого целевого слова обучает отдельный Logistic Regression
+   классификатор;
+4. проверяет качество на стратифицированных validation-split'ах.
+
+
+### 2. BERTWSI
+
+Это основной пайплайн:
+
+1. берет модель `bert-base-multilingual-cased`;
+2. токенизирует контекст и находит токены, соответствующие целевому слову;
+3. извлекает contextual embedding целевого слова;
+4. дополнительно строит BERT-вектор локального окна вокруг слова;
+5. добавляет компактные лексические признаки через `TF-IDF + TruncatedSVD`;
+6. кластеризует употребления каждого слова с помощью `KMeans`;
+7. считает средний ARI по нескольким стратифицированным разбиениям.
+
+
+## Архитектура
+
+Общая схема проекта:
+
+```text
+CSV-данные
+  - чтение train/test
+  - поиск целевого слова по positions
+  - построение признаков контекста
+  - кластеризация употреблений внутри каждого word
+  - расчет ARI на validation
+  - анализ качества по словам
 ```
 
-## Installation
+Для Word2Vec baseline признаки строятся как усреднение word embeddings.
+
+Для BERTWSI используются три группы признаков:
+
+- contextual embedding целевого слова из multilingual BERT;
+- embedding локального контекста вокруг целевого слова;
+- лексические признаки соседних слов через `TF-IDF + SVD`.
+
+После этого для каждого `word` отдельно запускается `KMeans`, потому что разные
+слова имеют разные наборы возможных значений.
+
+## Установка
+
+Создайте виртуальное окружение и установите зависимости:
 
 ```bash
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
 ```
-
-## Usage
-
-Open and run:
-
-- `word2vec.ipynb` for the fast Word2Vec + Logistic Regression baseline.
-- `BERTWSI.ipynb` for the BERTWSI clustering experiment.
